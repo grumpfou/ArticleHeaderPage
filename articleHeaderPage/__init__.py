@@ -10,7 +10,14 @@ import subprocess
 import sys
 import traceback
 
-fpdf.SYSTEM_TTFONTS = "/usr/share/fonts/truetype/dejavu/"
+if sys.platform == 'linux':
+	dir_font = '/usr/share/fonts/truetype/dejavu/'
+	onWindows = False
+
+elif sys.platform == 'win32':
+	dir_font = r'C:\Windows\Fonts'
+	onWindows = True
+# fpdf.SYSTEM_TTFONTS = "/usr/share/fonts/truetype/dejavu/"
 
 color_dict={
 	'blue':(0,0,255),
@@ -53,7 +60,8 @@ class HeaderPage:
 		for f in to_remove:
 			os.remove(f)
 
-		os.rename(filepath_combined,filepath)
+		# os.rename(filepath_combined,filepath) # do not work on windows
+		os.replace(filepath_combined,filepath)
 
 
 	def create_pdf(self,filepath_tmp):
@@ -62,10 +70,10 @@ class HeaderPage:
 		pdf.add_page()
 
 		dd = {
-			"":"/usr/share/fonts/truetype/dejavu/DejaVuSerif.ttf",
-			"B":"/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
-			"I":"/usr/share/fonts/truetype/dejavu/DejaVuSerif-Italic.ttf",
-		}
+			"":os.path.join(dir_font,"DejaVuSerif.ttf"),
+			"B":os.path.join(dir_font,"DejaVuSerif-Bold.ttf"),
+			"I":os.path.join(dir_font,"DejaVuSerif-Italic.ttf"),
+			}
 		for k,v in dd.items():
 			pdf.add_font('DejaVu', k, v, uni=True)
 		# pdf.set_font('Times','',25)
@@ -143,25 +151,25 @@ class Dialog (QtWidgets.QDialog):
 
 		textedit = QtWidgets.QTextEdit(parent=self)
 		def prase_wid():
-			a = bibtexparser.loads(unicode(textedit.toPlainText()))
+			a = bibtexparser.loads(str(textedit.toPlainText()))
 			if len(a.entries)==0:
 				QtWidgets.QMessageBox.critical(self,"Wrong Prasing","Wrong Bibtex reference.")
 				return False
 			d = a.entries[0]
-			if not d.has_key('file'):
+			if  not 'file' in d:
 				QtWidgets.QMessageBox.critical(self,"Wrong Prasing","Bibtex do not contain the file.")
 				return False
-			if not (d.has_key('year') or d.has_key('date') ):
+			if not ('year' in d or 'date' in d ):
 				QtWidgets.QMessageBox.critical(self,"Wrong Prasing","Bibtex do not contain the year or the date.")
 				return False
-			if not d.has_key('author'):
+			if not 'author' in d:
 				QtWidgets.QMessageBox.critical(self,"Wrong Prasing","Bibtex do not contain the author.")
 				return False
-			if not d.has_key('title'):
+			if not 'title' in d:
 				QtWidgets.QMessageBox.critical(self,"Wrong Prasing","Bibtex do not contain the title.")
 				return False
 
-			if d.has_key('year'): y = d['year']
+			if 'year' in d: y = d['year']
 			else:
 				tmp = re.findall('[0-9][0-9][0-9][0-9]',d['date'])
 				if len(tmp)==0:
@@ -197,21 +205,23 @@ class Dialog (QtWidgets.QDialog):
 					files[i] = f[:-len(motif)]
 
 			files = filter(lambda f: f.endswith('.pdf') or f.endswith('.PDF'), files)
-
-			print("files",files)
+			files = list(files)
 			if len(files)==0:
 				QtWidgets.QMessageBox.critical(self,"Wrong Prasing",
 										"No pdf file detected in bibtex file.")
 				return False
 			elif len(files)==1:
 				file = files[0]
+				if onWindows:
+					file = file.replace(r'C\:','C:') # on windows
+					file = file.replace(r'\\','\\') # on windows
 
 			else:
 				item = QtWidgets.QInputDialog.getItem(textedit,
 					'Choose pdf file','File: ', files, 0, False)
 				if not item[1]:
 					return False
-				file = unicode(item[0])
+				file = str(item[0])
 
 			m = file.find(':')
 			if m <-1 :
@@ -221,7 +231,7 @@ class Dialog (QtWidgets.QDialog):
 			file = file[m+1:]
 
 			notes = ""
-			if d.has_key('annote'):
+			if 'annote' in d:
 				notes = d['annote']
 
 			wid.close()
@@ -244,18 +254,18 @@ class Dialog (QtWidgets.QDialog):
 
 
 	def generate(self):
-		short = unicode(self.short_edit.text())
-		authors = unicode(self.authors_edit.text())
-		title = unicode(self.title_edit.text())
-		file  = unicode(self.file_edit.text())
-		notes = unicode(self.notes_edit.toPlainText())
+		short = str(self.short_edit.text())
+		authors = str(self.authors_edit.text())
+		title = str(self.title_edit.text())
+		file  = str(self.file_edit.text())
+		notes = str(self.notes_edit.toPlainText())
 
 		if int(self.replace.value()) >0 :
 			replace = int(self.replace.value ())
 		else:
 			replace = False
 
-		color = unicode(self.color.currentText())
+		color = str(self.color.currentText())
 		cs = "<center><strong>"
 		sc = "</center></strong><br/>"
 		m = "We are going to put the header page to the file:<br/>"+\
@@ -284,7 +294,7 @@ class Dialog (QtWidgets.QDialog):
 					color=color,
 					notes=notes,
 					)
-			except StandardError as e:
+			except Exception  as e:
 				mess = "Traceback (most recent call last):\n"
 				for frame in traceback.extract_tb(sys.exc_info()[2]):
 					fname,lineno,fn,text = frame
@@ -293,11 +303,15 @@ class Dialog (QtWidgets.QDialog):
 				mess+= e.__class__.__name__ +':'+str(e)
 				QtWidgets.QMessageBox.critical(self,'HeaderPage','Error when creating '+\
 					'the file: \n'+str(mess))
-				raise e
+				# raise e
 			else:
 				QtWidgets.QMessageBox.information(self,'HeaderPage','Header page '+\
 					'creation successeded')
-				subprocess.call(["xdg-open", file])
+				if onWindows:
+					pass # TODO
+					# subprocess.run(["start", file], check=True)
+				else:
+					subprocess.call(["xdg-open", file])
 
 
 		self.replace.setValue (0)
@@ -312,7 +326,7 @@ def  main():
 
 	parser.add_argument("--title",
 		# help="Import a file, for its the options, read the documentation",
-		# type='unicode',
+		# type='str',
 		nargs='+')
 
 	parser.add_argument("--short",
