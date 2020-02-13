@@ -341,7 +341,7 @@ def  main():
 		# help="Recheck the typography when opening the file.",
 		action='store_true')
 
-	parser.add_argument("--gui",
+	parser.add_argument("--console",
 		# help="Recheck the typography when opening the file.",
 		action='store_true')
 
@@ -356,9 +356,9 @@ def  main():
 	short  	  = adapt(args.short)
 	author    = adapt(args.author)
 	replace   = args.replace
-	gui   = args.gui
+	console   = args.console
 
-	if not gui:
+	if console:
 		if len(sys.argv)==1:
 			raise IOError('Please specify the file where to add the file')
 		HeaderPage(filepath = filepath,
